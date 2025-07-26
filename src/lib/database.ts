@@ -1,7 +1,19 @@
 import { User, Proposal, Meeting, Lead } from '@/types';
 import bcrypt from 'bcryptjs';
 
-// Simulação de base de dados em memória
+// Verificar se KV está disponível
+let kv: any = null;
+try {
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    const { kv: vercelKv } = require('@vercel/kv');
+    kv = vercelKv;
+    console.log('✅ Vercel KV conectado!');
+  }
+} catch {
+  console.log('⚠️ Vercel KV não disponível - usando memória local');
+}
+
+// Simulação de base de dados em memória (fallback)
 let users: User[] = [];
 let proposals: Proposal[] = [];
 let meetings: Meeting[] = [];
@@ -9,12 +21,12 @@ let leads: Lead[] = [];
 
 // Função para inicializar dados padrão
 export async function initializeData() {
-  // Criar usuário administrador inicial se não existir
-  if (users.length === 0) {
-    const adminPassword = await bcrypt.hash('admin123', 10);
-    
-    users = [
-      {
+  if (kv) {
+    // Usar Vercel KV
+    const adminExists = await kv.get('user:admin@pingdesk.com');
+    if (!adminExists) {
+      const adminPassword = await bcrypt.hash('admin123', 10);
+      const adminUser = {
         id: '1',
         name: 'Administrador',
         email: 'admin@pingdesk.com',
@@ -22,18 +34,27 @@ export async function initializeData() {
         role: 'admin',
         createdAt: new Date(),
         updatedAt: new Date()
-      }
-    ];
-  }
-  
-  if (proposals.length === 0) {
-    proposals = [];
-  }
-  if (meetings.length === 0) {
-    meetings = [];
-  }
-  if (leads.length === 0) {
-    leads = [];
+      };
+      await kv.set('user:admin@pingdesk.com', adminUser);
+      await kv.sadd('users', 'admin@pingdesk.com');
+      console.log('👤 Admin criado no KV');
+    }
+  } else {
+    // Fallback para memória local
+    if (users.length === 0) {
+      const adminPassword = await bcrypt.hash('admin123', 10);
+      users = [
+        {
+          id: '1',
+          name: 'Administrador',
+          email: 'admin@pingdesk.com',
+          password: adminPassword,
+          role: 'admin',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ];
+    }
   }
 }
 
@@ -41,51 +62,139 @@ export async function initializeData() {
 export const userService = {
   async findAll(): Promise<User[]> {
     await initializeData();
-    return users;
+    
+    if (kv) {
+      const userEmails = await kv.smembers('users') || [];
+      const users = await Promise.all(
+        userEmails.map(async (email: string) => {
+          return await kv.get(`user:${email}`);
+        })
+      );
+      return users.filter(Boolean);
+    } else {
+      return users;
+    }
   },
 
   async findById(id: string): Promise<User | undefined> {
     await initializeData();
-    return users.find(user => user.id === id);
+    
+    if (kv) {
+      const userEmails = await kv.smembers('users') || [];
+      for (const email of userEmails) {
+        const user = await kv.get(`user:${email}`);
+        if (user && user.id === id) {
+          return user;
+        }
+      }
+      return undefined;
+    } else {
+      return users.find(user => user.id === id);
+    }
   },
 
   async findByEmail(email: string): Promise<User | undefined> {
     await initializeData();
-    return users.find(user => user.email === email);
+    
+    if (kv) {
+      return await kv.get(`user:${email}`);
+    } else {
+      return users.find(user => user.email === email);
+    }
   },
 
   async create(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<User> {
     await initializeData();
-    const user: User = {
-      ...userData,
-      id: (users.length + 1).toString(),
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    users.push(user);
-    return user;
+    
+    if (kv) {
+      const userEmails = await kv.smembers('users') || [];
+      const newId = (userEmails.length + 1).toString();
+      
+      const user: User = {
+        ...userData,
+        id: newId,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      await kv.set(`user:${userData.email}`, user);
+      await kv.sadd('users', userData.email);
+      console.log('👤 Usuário criado no KV:', user.email);
+      return user;
+    } else {
+      const user: User = {
+        ...userData,
+        id: (users.length + 1).toString(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      users.push(user);
+      return user;
+    }
   },
 
   async update(id: string, userData: Partial<Omit<User, 'id' | 'createdAt'>>): Promise<User | undefined> {
     await initializeData();
-    const index = users.findIndex(user => user.id === id);
-    if (index === -1) return undefined;
     
-    users[index] = {
-      ...users[index],
-      ...userData,
-      updatedAt: new Date()
-    };
-    return users[index];
+    if (kv) {
+      const userEmails = await kv.smembers('users') || [];
+      for (const email of userEmails) {
+        const user = await kv.get(`user:${email}`);
+        if (user && user.id === id) {
+          const updatedUser = {
+            ...user,
+            ...userData,
+            updatedAt: new Date()
+          };
+          
+          // Se o email mudou, precisamos atualizar as chaves
+          if (userData.email && userData.email !== user.email) {
+            await kv.del(`user:${user.email}`);
+            await kv.srem('users', user.email);
+            await kv.set(`user:${userData.email}`, updatedUser);
+            await kv.sadd('users', userData.email);
+          } else {
+            await kv.set(`user:${email}`, updatedUser);
+          }
+          
+          return updatedUser;
+        }
+      }
+      return undefined;
+    } else {
+      const index = users.findIndex(user => user.id === id);
+      if (index === -1) return undefined;
+      
+      users[index] = {
+        ...users[index],
+        ...userData,
+        updatedAt: new Date()
+      };
+      return users[index];
+    }
   },
 
   async delete(id: string): Promise<boolean> {
     await initializeData();
-    const index = users.findIndex(user => user.id === id);
-    if (index === -1) return false;
     
-    users.splice(index, 1);
-    return true;
+    if (kv) {
+      const userEmails = await kv.smembers('users') || [];
+      for (const email of userEmails) {
+        const user = await kv.get(`user:${email}`);
+        if (user && user.id === id) {
+          await kv.del(`user:${email}`);
+          await kv.srem('users', email);
+          return true;
+        }
+      }
+      return false;
+    } else {
+      const index = users.findIndex(user => user.id === id);
+      if (index === -1) return false;
+      
+      users.splice(index, 1);
+      return true;
+    }
   }
 };
 
