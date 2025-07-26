@@ -203,7 +203,11 @@ export default function AgendaPage() {
       
       try {
         if (isEditing) {
-          await updateMeeting(editingMeeting.id, formData);
+          const updateData = {
+            ...formData,
+            date: new Date(formData.date)
+          };
+          await updateMeeting(editingMeeting.id, updateData);
         } else {
           const response = await fetch('/api/meetings', {
             method: 'POST',
