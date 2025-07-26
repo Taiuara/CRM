@@ -1,11 +1,19 @@
 import { User, Proposal, Meeting, Lead } from '@/types';
 import bcrypt from 'bcryptjs';
+import { neon } from '@neondatabase/serverless';
 
-// PostgreSQL para produção (Neon Database)
+// Neon Database (PostgreSQL) - RECOMENDADO
+let sql: ReturnType<typeof neon> | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let db: any = null;
+
 try {
   if (process.env.DATABASE_URL) {
+    // Preferir Neon Database (mais eficiente)
+    sql = neon(process.env.DATABASE_URL);
+    console.log('✅ Neon Database conectado!');
+  } else {
+    // Fallback para PostgreSQL tradicional
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Pool } = require('pg');
     db = new Pool({
@@ -15,7 +23,7 @@ try {
     console.log('✅ PostgreSQL conectado!');
   }
 } catch {
-  console.log('⚠️ PostgreSQL não disponível');
+  console.log('⚠️ Banco de dados não disponível - usando memória local');
 }
 
 // Verificar se KV está disponível  
@@ -41,13 +49,14 @@ let meetings: Meeting[] = [];
 // eslint-disable-next-line prefer-const
 let leads: Lead[] = [];
 
-// Criar tabelas no PostgreSQL se necessário
+// Criar tabelas no banco de dados se necessário
 async function createTables() {
-  if (!db) return;
+  if (!sql && !db) return;
   
   try {
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS users (
+    if (sql) {
+      // Usar Neon Database (template literals)
+      await sql`CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
@@ -55,11 +64,9 @@ async function createTables() {
         role VARCHAR(50) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS proposals (
+      )`;
+      
+      await sql`CREATE TABLE IF NOT EXISTS proposals (
         id SERIAL PRIMARY KEY,
         provider VARCHAR(255) NOT NULL,
         whatsapp VARCHAR(20),
@@ -70,11 +77,9 @@ async function createTables() {
         salesperson_id INTEGER REFERENCES users(id),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS meetings (
+      )`;
+      
+      await sql`CREATE TABLE IF NOT EXISTS meetings (
         id SERIAL PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
         description TEXT,
@@ -84,11 +89,9 @@ async function createTables() {
         salesperson_id INTEGER REFERENCES users(id),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS leads (
+      )`;
+      
+      await sql`CREATE TABLE IF NOT EXISTS leads (
         id SERIAL PRIMARY KEY,
         provider VARCHAR(255),
         contact VARCHAR(255),
@@ -96,10 +99,59 @@ async function createTables() {
         state VARCHAR(100),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+      )`;
+    } else if (db) {
+      // Usar PostgreSQL tradicional
+      const queries = [
+        `CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          password VARCHAR(255) NOT NULL,
+          role VARCHAR(50) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS proposals (
+          id SERIAL PRIMARY KEY,
+          provider VARCHAR(255) NOT NULL,
+          whatsapp VARCHAR(20),
+          email VARCHAR(255),
+          responsible_name VARCHAR(255),
+          description TEXT,
+          status VARCHAR(50) NOT NULL,
+          salesperson_id INTEGER REFERENCES users(id),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS meetings (
+          id SERIAL PRIMARY KEY,
+          title VARCHAR(255) NOT NULL,
+          description TEXT,
+          meeting_date TIMESTAMP NOT NULL,
+          type VARCHAR(50) NOT NULL,
+          proposal_id INTEGER REFERENCES proposals(id),
+          salesperson_id INTEGER REFERENCES users(id),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS leads (
+          id SERIAL PRIMARY KEY,
+          provider VARCHAR(255),
+          contact VARCHAR(255),
+          site VARCHAR(255),
+          state VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`
+      ];
+
+      for (const query of queries) {
+        await db.query(query);
+      }
+    }
     
-    console.log('✅ Tabelas PostgreSQL criadas/verificadas');
+    console.log('✅ Tabelas criadas/verificadas');
   } catch (error) {
     console.error('❌ Erro ao criar tabelas:', error);
   }
@@ -107,8 +159,18 @@ async function createTables() {
 
 // Função para inicializar dados padrão
 export async function initializeData() {
-  if (db) {
-    // Usar PostgreSQL (Neon)
+  if (sql) {
+    // Usar Neon Database
+    await createTables();
+    
+    const adminCheck = await sql`SELECT * FROM users WHERE email = 'admin@pingdesk.com'`;
+    if (Array.isArray(adminCheck) && adminCheck.length === 0) {
+      const adminPassword = await bcrypt.hash('admin123', 10);
+      await sql`INSERT INTO users (name, email, password, role) VALUES (${'Administrador'}, ${'admin@pingdesk.com'}, ${adminPassword}, ${'admin'})`;
+      console.log('👤 Admin criado no Neon Database');
+    }
+  } else if (db) {
+    // Usar PostgreSQL tradicional
     await createTables();
     
     const adminCheck = await db.query('SELECT * FROM users WHERE email = $1', ['admin@pingdesk.com']);
@@ -162,7 +224,19 @@ export const userService = {
   async findAll(): Promise<User[]> {
     await initializeData();
     
-    if (db) {
+    if (sql) {
+      const result = await sql`SELECT * FROM users ORDER BY created_at DESC`;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return Array.isArray(result) ? result.map((row: any) => ({
+        id: row.id.toString(),
+        name: row.name,
+        email: row.email,
+        password: row.password,
+        role: row.role,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      })) : [];
+    } else if (db) {
       const result = await db.query('SELECT * FROM users ORDER BY created_at DESC');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return result.rows.map((row: any) => ({
