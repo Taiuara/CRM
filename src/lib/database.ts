@@ -1,7 +1,22 @@
 import { User, Proposal, Meeting, Lead } from '@/types';
 import bcrypt from 'bcryptjs';
 
-// Verificar se KV está disponível
+// PostgreSQL para produção (Neon Database)
+let db: any = null;
+try {
+  if (process.env.DATABASE_URL) {
+    const { Pool } = require('pg');
+    db = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+    console.log('✅ PostgreSQL conectado!');
+  }
+} catch {
+  console.log('⚠️ PostgreSQL não disponível');
+}
+
+// Verificar se KV está disponível  
 let kv: any = null;
 try {
   if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
@@ -19,9 +34,86 @@ let proposals: Proposal[] = [];
 let meetings: Meeting[] = [];
 let leads: Lead[] = [];
 
+// Criar tabelas no PostgreSQL se necessário
+async function createTables() {
+  if (!db) return;
+  
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        role VARCHAR(50) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS proposals (
+        id SERIAL PRIMARY KEY,
+        provider VARCHAR(255) NOT NULL,
+        whatsapp VARCHAR(20),
+        email VARCHAR(255),
+        responsible_name VARCHAR(255),
+        description TEXT,
+        status VARCHAR(50) NOT NULL,
+        salesperson_id INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS meetings (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        meeting_date TIMESTAMP NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        proposal_id INTEGER REFERENCES proposals(id),
+        salesperson_id INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS leads (
+        id SERIAL PRIMARY KEY,
+        provider VARCHAR(255),
+        contact VARCHAR(255),
+        site VARCHAR(255),
+        state VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    console.log('✅ Tabelas PostgreSQL criadas/verificadas');
+  } catch (error) {
+    console.error('❌ Erro ao criar tabelas:', error);
+  }
+}
+
 // Função para inicializar dados padrão
 export async function initializeData() {
-  if (kv) {
+  if (db) {
+    // Usar PostgreSQL (Neon)
+    await createTables();
+    
+    const adminCheck = await db.query('SELECT * FROM users WHERE email = $1', ['admin@pingdesk.com']);
+    if (adminCheck.rows.length === 0) {
+      const adminPassword = await bcrypt.hash('admin123', 10);
+      await db.query(
+        'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)',
+        ['Administrador', 'admin@pingdesk.com', adminPassword, 'admin']
+      );
+      console.log('👤 Admin criado no PostgreSQL');
+    }
+  } else if (kv) {
     // Usar Vercel KV
     const adminExists = await kv.get('user:admin@pingdesk.com');
     if (!adminExists) {
@@ -63,7 +155,18 @@ export const userService = {
   async findAll(): Promise<User[]> {
     await initializeData();
     
-    if (kv) {
+    if (db) {
+      const result = await db.query('SELECT * FROM users ORDER BY created_at DESC');
+      return result.rows.map((row: any) => ({
+        id: row.id.toString(),
+        name: row.name,
+        email: row.email,
+        password: row.password,
+        role: row.role,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      }));
+    } else if (kv) {
       const userEmails = await kv.smembers('users') || [];
       const users = await Promise.all(
         userEmails.map(async (email: string) => {
@@ -79,7 +182,21 @@ export const userService = {
   async findById(id: string): Promise<User | undefined> {
     await initializeData();
     
-    if (kv) {
+    if (db) {
+      const result = await db.query('SELECT * FROM users WHERE id = $1', [parseInt(id)]);
+      if (result.rows.length === 0) return undefined;
+      
+      const row = result.rows[0];
+      return {
+        id: row.id.toString(),
+        name: row.name,
+        email: row.email,
+        password: row.password,
+        role: row.role,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      };
+    } else if (kv) {
       const userEmails = await kv.smembers('users') || [];
       for (const email of userEmails) {
         const user = await kv.get(`user:${email}`);
@@ -96,7 +213,21 @@ export const userService = {
   async findByEmail(email: string): Promise<User | undefined> {
     await initializeData();
     
-    if (kv) {
+    if (db) {
+      const result = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+      if (result.rows.length === 0) return undefined;
+      
+      const row = result.rows[0];
+      return {
+        id: row.id.toString(),
+        name: row.name,
+        email: row.email,
+        password: row.password,
+        role: row.role,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      };
+    } else if (kv) {
       return await kv.get(`user:${email}`);
     } else {
       return users.find(user => user.email === email);
@@ -106,7 +237,24 @@ export const userService = {
   async create(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<User> {
     await initializeData();
     
-    if (kv) {
+    if (db) {
+      const result = await db.query(
+        'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING *',
+        [userData.name, userData.email, userData.password, userData.role]
+      );
+      
+      const row = result.rows[0];
+      console.log('👤 Usuário criado no PostgreSQL:', userData.email);
+      return {
+        id: row.id.toString(),
+        name: row.name,
+        email: row.email,
+        password: row.password,
+        role: row.role,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      };
+    } else if (kv) {
       const userEmails = await kv.smembers('users') || [];
       const newId = (userEmails.length + 1).toString();
       
@@ -136,7 +284,53 @@ export const userService = {
   async update(id: string, userData: Partial<Omit<User, 'id' | 'createdAt'>>): Promise<User | undefined> {
     await initializeData();
     
-    if (kv) {
+    if (db) {
+      const setClause = [];
+      const values = [];
+      let paramCount = 1;
+      
+      if (userData.name) {
+        setClause.push(`name = $${paramCount}`);
+        values.push(userData.name);
+        paramCount++;
+      }
+      if (userData.email) {
+        setClause.push(`email = $${paramCount}`);
+        values.push(userData.email);
+        paramCount++;
+      }
+      if (userData.password) {
+        setClause.push(`password = $${paramCount}`);
+        values.push(userData.password);
+        paramCount++;
+      }
+      if (userData.role) {
+        setClause.push(`role = $${paramCount}`);
+        values.push(userData.role);
+        paramCount++;
+      }
+      
+      setClause.push(`updated_at = CURRENT_TIMESTAMP`);
+      values.push(parseInt(id));
+      
+      const result = await db.query(
+        `UPDATE users SET ${setClause.join(', ')} WHERE id = $${paramCount} RETURNING *`,
+        values
+      );
+      
+      if (result.rows.length === 0) return undefined;
+      
+      const row = result.rows[0];
+      return {
+        id: row.id.toString(),
+        name: row.name,
+        email: row.email,
+        password: row.password,
+        role: row.role,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      };
+    } else if (kv) {
       const userEmails = await kv.smembers('users') || [];
       for (const email of userEmails) {
         const user = await kv.get(`user:${email}`);
@@ -177,7 +371,10 @@ export const userService = {
   async delete(id: string): Promise<boolean> {
     await initializeData();
     
-    if (kv) {
+    if (db) {
+      const result = await db.query('DELETE FROM users WHERE id = $1', [parseInt(id)]);
+      return result.rowCount > 0;
+    } else if (kv) {
       const userEmails = await kv.smembers('users') || [];
       for (const email of userEmails) {
         const user = await kv.get(`user:${email}`);
