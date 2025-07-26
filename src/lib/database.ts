@@ -1,4 +1,5 @@
 import { User, Proposal, Meeting, Lead } from '@/types';
+import bcrypt from 'bcryptjs';
 
 // Simulação de base de dados em memória
 let users: User[] = [];
@@ -8,10 +9,23 @@ let leads: Lead[] = [];
 
 // Função para inicializar dados padrão
 export async function initializeData() {
-  // Base de dados limpa - sem dados de teste
+  // Criar usuário administrador inicial se não existir
   if (users.length === 0) {
-    users = [];
+    const adminPassword = await bcrypt.hash('admin123', 10);
+    
+    users = [
+      {
+        id: '1',
+        name: 'Administrador',
+        email: 'admin@pingdesk.com',
+        password: adminPassword,
+        role: 'admin',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    ];
   }
+  
   if (proposals.length === 0) {
     proposals = [];
   }
