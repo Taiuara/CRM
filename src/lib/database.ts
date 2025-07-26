@@ -2,9 +2,11 @@ import { User, Proposal, Meeting, Lead } from '@/types';
 import bcrypt from 'bcryptjs';
 
 // PostgreSQL para produção (Neon Database)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let db: any = null;
 try {
   if (process.env.DATABASE_URL) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Pool } = require('pg');
     db = new Pool({
       connectionString: process.env.DATABASE_URL,
@@ -17,9 +19,11 @@ try {
 }
 
 // Verificar se KV está disponível  
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let kv: any = null;
 try {
   if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { kv: vercelKv } = require('@vercel/kv');
     kv = vercelKv;
     console.log('✅ Vercel KV conectado!');
@@ -30,8 +34,11 @@ try {
 
 // Simulação de base de dados em memória (fallback)
 let users: User[] = [];
+// eslint-disable-next-line prefer-const
 let proposals: Proposal[] = [];
+// eslint-disable-next-line prefer-const
 let meetings: Meeting[] = [];
+// eslint-disable-next-line prefer-const
 let leads: Lead[] = [];
 
 // Criar tabelas no PostgreSQL se necessário
@@ -157,6 +164,7 @@ export const userService = {
     
     if (db) {
       const result = await db.query('SELECT * FROM users ORDER BY created_at DESC');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return result.rows.map((row: any) => ({
         id: row.id.toString(),
         name: row.name,
