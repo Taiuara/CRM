@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { proposalService } from '@/lib/database';
+import { proposalService } from '@/lib/database-persistent';
 
 export async function GET() {
   try {

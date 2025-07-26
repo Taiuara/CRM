@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { userService } from '@/lib/database';
+import { userService } from '@/lib/database-persistent';
 import { User } from '@/types';
 import bcrypt from 'bcryptjs';
 

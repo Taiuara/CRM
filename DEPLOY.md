@@ -20,22 +20,46 @@ O projeto PingDesk CRM está pronto para produção com:
 - Selecione o repositório: `Taiuara/crm`
 - Clique em "Import"
 
-### 3. ⚠️ Configure as Variáveis de Ambiente (ESSENCIAL)
+## 🚨 PROBLEMA IDENTIFICADO E SOLUÇÃO
 
-No painel do Vercel, antes do deploy, adicione estas variáveis:
+**❌ PROBLEMA**: O sistema usa banco de dados em memória que **não funciona no Vercel** (serverless).
+**✅ SOLUÇÃO**: Implementação de persistência com Vercel KV (Redis) criada.
+
+### PASSOS URGENTES:
+
+1. **Implemente a correção** (arquivo já criado: `database-persistent.ts`)
+2. **Configure Vercel KV** no seu projeto
+3. **Redeploy** com as novas configurações
+
+### 3. ⚠️ Configure o Banco de Dados (ESSENCIAL)
+
+**🗄️ PRIMEIRO: Crie o Vercel KV (Redis)**
+1. No painel do Vercel, vá em "Storage" → "Create Database"
+2. Selecione **"KV (Redis)"**
+3. Nomeie como: `crm-database`
+4. Clique em "Create & Continue"
+5. **Conecte ao projeto CRM**
+
+### 4. ⚠️ Configure as Variáveis de Ambiente
+
+No painel do Vercel, adicione estas variáveis **EXATAS**:
 
 ```env
-NEXTAUTH_SECRET=sua-chave-super-secreta-aqui-minimo-32-caracteres
-NEXTAUTH_URL=https://seu-dominio.vercel.app
+NEXTAUTH_SECRET=0cd6fd7915b44e77d0d435bc2ffe85b2
+NEXTAUTH_URL=https://crm-tau-blue.vercel.app
 ```
 
-**🔑 IMPORTANTE**:
-- Para `NEXTAUTH_SECRET`: Use no mínimo 32 caracteres aleatórios
-  - Exemplo: `abc123def456ghi789jkl012mno345pqr678stu901vwx234yz`
-- Para `NEXTAUTH_URL`: Use exatamente a URL que o Vercel fornecer
-  - Será algo como: `https://crm-taiuara.vercel.app`
+**✅ SEUS DADOS ESPECÍFICOS**:
+- `NEXTAUTH_SECRET`: `0cd6fd7915b44e77d0d435bc2ffe85b2`
+- `NEXTAUTH_URL`: `https://crm-tau-blue.vercel.app`
 
-### 4. Deploy Automático
+**📋 Como adicionar no Vercel**:
+1. No painel do projeto, vá em "Settings" → "Environment Variables"
+2. Adicione cada variável uma por vez
+3. **O KV adiciona automaticamente suas próprias variáveis**
+4. Clique em "Save" após cada uma
+
+### 5. Deploy Automático
 - Vercel detecta automaticamente Next.js
 - Clique em "Deploy"
 - Aguarde o build completar (2-3 minutos)
