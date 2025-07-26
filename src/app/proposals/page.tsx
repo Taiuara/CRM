@@ -9,7 +9,6 @@ import {
   Edit,
   Trash2,
   Eye,
-  Filter,
   Search
 } from 'lucide-react';
 import Link from 'next/link';

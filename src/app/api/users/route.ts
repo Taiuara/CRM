@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { userService } from '@/lib/database';
 import bcrypt from 'bcryptjs';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     
@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
     const users = await userService.findAll();
     
     // Remover senhas da resposta
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const usersWithoutPasswords = users.map(({ password, ...user }) => user);
 
     return NextResponse.json(usersWithoutPasswords);
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Remover senha da resposta
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...userWithoutPassword } = user;
 
     return NextResponse.json(userWithoutPassword, { status: 201 });

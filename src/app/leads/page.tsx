@@ -10,7 +10,6 @@ import {
   ExternalLink,
   ArrowRight,
   Trash2,
-  Edit,
   Globe,
   MapPin,
   Phone

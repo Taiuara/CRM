@@ -1,5 +1,4 @@
 import { User, Proposal, Meeting, Lead } from '@/types';
-import bcrypt from 'bcryptjs';
 
 // Simulação de base de dados em memória
 let users: User[] = [];

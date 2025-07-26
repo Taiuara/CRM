@@ -3,20 +3,19 @@
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
-import { DashboardStats } from '@/types';
+import { DashboardStats, Meeting } from '@/types';
 import {
   TrendingUp,
   DollarSign,
   FileText,
   CheckCircle,
-  Calendar,
-  Users
+  Calendar
 } from 'lucide-react';
 
 export default function DashboardPage() {
   const { data: session } = useSession();
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
+  const [upcomingMeetings, setUpcomingMeetings] = useState<Meeting[]>([]);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -45,7 +44,13 @@ export default function DashboardPage() {
 
   const isAdmin = session?.user?.role === 'admin';
 
-  const StatCard = ({ title, value, icon: Icon, color, subtitle }: any) => (
+  const StatCard = ({ title, value, icon: Icon, color, subtitle }: {
+    title: string;
+    value: string | number;
+    icon: React.ComponentType<{ className?: string }>;
+    color: string;
+    subtitle?: string;
+  }) => (
     <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
       <div className="flex items-center justify-between">
         <div>
@@ -117,7 +122,7 @@ export default function DashboardPage() {
                 {upcomingMeetings.map((meeting) => (
                   <div key={meeting.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div>
-                      <p className="font-medium text-gray-900">{meeting.provider}</p>
+                      <p className="font-medium text-gray-900">{meeting.contact}</p>
                       <p className="text-sm text-gray-600">
                         {new Date(meeting.date).toLocaleDateString('pt-BR')} às {meeting.time}
                       </p>

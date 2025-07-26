@@ -3,13 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import Sidebar from '@/components/Sidebar';
-import { Meeting, Proposal, MEETING_TYPE_LABELS, MeetingType } from '@/types';
+import { Meeting, Proposal, User as UserType, MEETING_TYPE_LABELS, MeetingType } from '@/types';
 import {
-  Calendar,
   Plus,
   ChevronLeft,
   ChevronRight,
-  Clock,
   User,
   Mail,
   Phone,
@@ -25,7 +23,7 @@ export default function AgendaPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<UserType[]>([]);
   const [showNewMeetingModal, setShowNewMeetingModal] = useState(false);
   const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,7 +60,7 @@ export default function AgendaPage() {
     };
 
     fetchData();
-  }, []);
+  }, [session?.user.role]);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -160,7 +158,7 @@ export default function AgendaPage() {
     }
   };
 
-  const updateMeeting = async (meetingId: string, updateData: any) => {
+  const updateMeeting = async (meetingId: string, updateData: Partial<Meeting>) => {
     try {
       const response = await fetch(`/api/meetings/${meetingId}`, {
         method: 'PUT',

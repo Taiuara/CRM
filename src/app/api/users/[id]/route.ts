@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { userService } from '@/lib/database';
+import { User } from '@/types';
 import bcrypt from 'bcryptjs';
 
 export async function PUT(
@@ -43,7 +44,7 @@ export async function PUT(
       }
     }
 
-    const updateData: any = { name, email, role };
+    const updateData: Partial<User> = { name, email, role };
 
     // Atualizar senha apenas se fornecida
     if (password) {
@@ -57,6 +58,7 @@ export async function PUT(
     }
 
     // Remover senha da resposta
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...userWithoutPassword } = updatedUser;
 
     return NextResponse.json(userWithoutPassword);
