@@ -73,9 +73,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     
     if (!session || session.user.role !== 'admin') {
@@ -83,14 +84,14 @@ export async function DELETE(
     }
 
     // Não permitir que o admin delete a si mesmo
-    if (params.id === session.user.id) {
+    if (id === session.user.id) {
       return NextResponse.json(
         { error: 'Não é possível excluir seu próprio usuário' },
         { status: 400 }
       );
     }
 
-    const success = await userService.delete(params.id);
+    const success = await userService.delete(id);
 
     if (!success) {
       return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
