@@ -3,17 +3,19 @@ import bcrypt from 'bcryptjs';
 
 // Para desenvolvimento local - dados em memória
 let localUsers: User[] = [];
-let localProposals: Proposal[] = [];
-let localMeetings: Meeting[] = [];
-let localLeads: Lead[] = [];
+const localProposals: Proposal[] = [];
+const localMeetings: Meeting[] = [];
+const localLeads: Lead[] = [];
 
 // Vercel KV para produção (se disponível)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let kv: any = null;
 try {
   if (process.env.NODE_ENV === 'production' && process.env.KV_REST_API_URL) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     kv = require('@vercel/kv').kv;
   }
-} catch (error) {
+} catch {
   console.log('Vercel KV não disponível, usando memória local');
 }
 

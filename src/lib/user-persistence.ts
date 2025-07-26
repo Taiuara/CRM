@@ -4,14 +4,14 @@ export const userPersistence = {
   isProduction: () => typeof window !== 'undefined' && window.location.hostname.includes('.vercel.app'),
   
   // Salvar usuários no localStorage (fallback para Vercel)
-  saveUsers: (users: any[]) => {
+  saveUsers: (users: unknown[]) => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('crm-users-backup', JSON.stringify(users));
     }
   },
   
   // Carregar usuários do localStorage
-  loadUsers: (): any[] => {
+  loadUsers: (): unknown[] => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('crm-users-backup');
       return saved ? JSON.parse(saved) : [];
@@ -32,7 +32,7 @@ export const userPersistence = {
       }
       // Se é um usuário criado/atualizado, atualizar backup
       else if (data.id && data.email) {
-        const users = userPersistence.loadUsers();
+        const users = userPersistence.loadUsers() as { id: string; email: string }[];
         const index = users.findIndex(u => u.id === data.id);
         if (index >= 0) {
           users[index] = data;

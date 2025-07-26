@@ -5,7 +5,7 @@ export const crmBackup = {
     (window.location.hostname.includes('.vercel.app') || window.location.hostname.includes('localhost')),
   
   // Salvar todos os dados no localStorage
-  saveData: (key: string, data: any) => {
+  saveData: (key: string, data: unknown) => {
     if (typeof window !== 'undefined') {
       localStorage.setItem(`crm-${key}`, JSON.stringify(data));
       console.log(`✅ Backup salvo: ${key}`, data);
@@ -13,7 +13,7 @@ export const crmBackup = {
   },
   
   // Carregar dados do localStorage
-  loadData: (key: string): any[] => {
+  loadData: (key: string): unknown[] => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(`crm-${key}`);
       return saved ? JSON.parse(saved) : [];
@@ -34,8 +34,8 @@ export const crmBackup = {
           if (Array.isArray(data)) {
             crmBackup.saveData('users', data);
           } else if (data.id && data.email) {
-            const users = crmBackup.loadData('users');
-            const index = users.findIndex((u: any) => u.id === data.id);
+            const users = crmBackup.loadData('users') as { id: string; email: string }[];
+            const index = users.findIndex((u) => u.id === data.id);
             if (index >= 0) {
               users[index] = data;
             } else {
@@ -49,8 +49,8 @@ export const crmBackup = {
           if (Array.isArray(data)) {
             crmBackup.saveData('meetings', data);
           } else if (data.id) {
-            const meetings = crmBackup.loadData('meetings');
-            const index = meetings.findIndex((m: any) => m.id === data.id);
+            const meetings = crmBackup.loadData('meetings') as { id: string }[];
+            const index = meetings.findIndex((m) => m.id === data.id);
             if (index >= 0) {
               meetings[index] = data;
             } else {
@@ -64,8 +64,8 @@ export const crmBackup = {
           if (Array.isArray(data)) {
             crmBackup.saveData('proposals', data);
           } else if (data.id) {
-            const proposals = crmBackup.loadData('proposals');
-            const index = proposals.findIndex((p: any) => p.id === data.id);
+            const proposals = crmBackup.loadData('proposals') as { id: string }[];
+            const index = proposals.findIndex((p) => p.id === data.id);
             if (index >= 0) {
               proposals[index] = data;
             } else {
@@ -79,8 +79,8 @@ export const crmBackup = {
           if (Array.isArray(data)) {
             crmBackup.saveData('leads', data);
           } else if (data.id) {
-            const leads = crmBackup.loadData('leads');
-            const index = leads.findIndex((l: any) => l.id === data.id);
+            const leads = crmBackup.loadData('leads') as { id: string }[];
+            const index = leads.findIndex((l) => l.id === data.id);
             if (index >= 0) {
               leads[index] = data;
             } else {
@@ -121,8 +121,8 @@ export const crmBackup = {
   
   // Função para deletar item do backup
   deleteFromBackup: (type: string, id: string) => {
-    const data = crmBackup.loadData(type);
-    const filtered = data.filter((item: any) => item.id !== id);
+    const data = crmBackup.loadData(type) as { id: string }[];
+    const filtered = data.filter((item) => item.id !== id);
     crmBackup.saveData(type, filtered);
   },
   
